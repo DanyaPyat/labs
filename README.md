@@ -14,19 +14,6 @@ Welcome to my Data Analysis Workspace! This repository contains various projects
 - **Machine Learning** implementations for real-world datasets
 - **Automated reports** and dashboard examples
 
-## 🚀 Featured Projects
-1. **Customer Segmentation Analysis**  
-   `Clustering | RFM Analysis | Plotly Visualizations`  
-   [Notebooks/Customer_Segmentation.ipynb](Notebooks/)
-
-2. **Sales Performance Dashboard**  
-   `Power BI | Time Series Analysis | KPI Tracking`  
-   [Reports/Sales_Dashboard.pbix](Reports/)
-
-3. **Predictive Maintenance Model**  
-   `Random Forest | Feature Engineering | SHAP Values`  
-   [Models/predictive_maintenance.ipynb](Models/)
-
 ## 🛠️ Tech Stack
 - **Languages**: Python
 - **Libraries**: Pandas, NumPy, Matplotlib, Seaborn, Plotly
