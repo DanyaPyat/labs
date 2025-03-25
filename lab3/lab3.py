@@ -17,7 +17,7 @@ st.set_page_config(
 def load_data():
     print(1111)
     try:
-        df = pd.read_csv("out.csv")
+        df = pd.read_csv("E:\\uni\\anal\\lab3\\out.csv")
         df["year_week"] = (
             df["year"].astype(str) + "-W" + df["week"].astype(int).astype(str)
         )
