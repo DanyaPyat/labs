@@ -15,7 +15,6 @@ st.set_page_config(
 # Load data
 @st.cache_data
 def load_data():
-    print(1111)
     try:
         df = pd.read_csv("E:\\uni\\anal\\lab3\\out.csv")
         df["year_week"] = (
