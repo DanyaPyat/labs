@@ -172,7 +172,7 @@ cython_debug/
 
 Data
 
-.csv
-.data
-.names
-.txt
+*.csv
+*.data
+*.names
+*.txt
