@@ -176,3 +176,5 @@ Data
 *.data
 *.names
 *.txt
+
+tests
