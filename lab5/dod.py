@@ -7,6 +7,11 @@ from scipy.signal import butter, filtfilt  # Використовуємо SciPy 
 # Ініціалізуємо Dash додаток
 app = dash.Dash(__name__)
 
+# Глобальні змінні для збереження стану шуму
+current_noise = None
+# Зберігаємо параметри, використані для останньої генерації current_noise
+current_noise_params = {"mean": None, "cov": None}
+
 # Параметри за замовчуванням для генерації сигналу та шуму
 default_params = {
     "amplitude": 1.0,
@@ -19,19 +24,17 @@ default_params = {
     "filter_type": "none",  # Початковий тип фільтра
 }
 
+
 # --- Функції фільтрації ---
-
-
-# Просте ковзне середнє з вікном 10 точок
+# ковзне середнє з вікном 10 точок
 def custom_moving_average(signal):
-    # Згортка з ядром, що усереднює 10 сусідніх точок
-    # mode="same" вирівнює вихідний розмір до вхідного
-    return np.convolve(signal, np.ones(10) / 10, mode="same")
+    return np.convolve(
+        signal, np.ones(10) / 10, mode="same"
+    )  # mode="same" вирівнює вихідний розмір до вхідного
 
 
 # Низькочастотний фільтр Баттерворта
 def butterworth_filter(signal):
-    # Розробляємо фільтр: 4-го порядку, нормалізована частота зрізу 0.1 (від Nyquist)
     b, a = butter(4, 0.1, btype="low")
     # Застосовуємо фільтр двічі (вперед і назад) для отримання нульового фазового зсуву
     return filtfilt(b, a, signal)
@@ -56,7 +59,7 @@ app.layout = html.Div(
                 html.Div(
                     [
                         html.Button(
-                            "🔄 Скинути",
+                            "Скинути",
                             id="reset-button",
                             style={
                                 "width": "120px",
@@ -81,13 +84,25 @@ app.layout = html.Div(
                         dcc.Dropdown(
                             id="filter-type",
                             options=[
-                                {"label": "Фільтр Баттерворта", "value": "butterworth"},
-                                {"label": "Ковзне середнє", "value": "custom"},
-                                {"label": "Без фільтра", "value": "none"},
+                                {
+                                    "label": "Без фільтра",
+                                    "value": "none",
+                                },  # Додано опцію "Без фільтра"
+                                {
+                                    "label": "Фільтр Баттерворта (НЧ)",
+                                    "value": "butterworth",
+                                },  # Уточнено назву
+                                {
+                                    "label": "Ковзне середнє (10 точок)",
+                                    "value": "custom",
+                                },  # Уточнено назву
                             ],
                             value="none",
                             clearable=False,
-                            style={"width": "200px", "margin": "10px"},
+                            style={
+                                "width": "250px",
+                                "margin": "10px",
+                            },  # Розширено ширину
                         ),
                     ],
                     style={
@@ -136,7 +151,7 @@ app.layout = html.Div(
                                 dcc.Slider(
                                     id="phase",
                                     min=0,
-                                    max=6.28,
+                                    max=6.28,  # Приблизно 2*pi
                                     step=0.1,
                                     value=0.0,
                                     marks={0: "0", 3.14: "π", 6.28: "2π"},
@@ -204,14 +219,32 @@ app.layout = html.Div(
     ],
 )
 def update_plot(amp, freq, phase, noise_mean, noise_cov, switches, filter_type):
-    t = np.linspace(0, 10, 1000)  # Часовий вектор
+    global current_noise, current_noise_params
+    t = np.linspace(0, 10, 1000)  # Часовий вектор (фіксована довжина і тривалість)
 
-    # Генерація чистого та зашумленого сигналів
+    # Перевіряємо, чи потрібно згенерувати новий шум:
+    noise_params_changed = (
+        current_noise_params["mean"] != noise_mean
+        or current_noise_params["cov"] != noise_cov
+    )
+
+    if current_noise is None or noise_params_changed:
+        print(f"Generating NEW noise mean={noise_mean:.2f}, cov={noise_cov:.2f}")
+        np.random.seed(
+            42
+        )  # Фіксуємо seed для відтворюваності шуму при тих же параметрах
+        current_noise = np.random.normal(noise_mean, np.sqrt(noise_cov), len(t))
+        # Оновлюємо параметри, які були використані для цієї генерації
+        current_noise_params["mean"] = noise_mean
+        current_noise_params["cov"] = noise_cov
+    else:
+        print("Using EXISTING noise realization.")
+
+    # Генерація чистого сигналу (залежить від амплітуди, частоти, фази)
     y_clean = amp * np.sin(2 * np.pi * freq * t + phase)
-    noise = np.random.normal(
-        noise_mean, np.sqrt(noise_cov), len(t)
-    )  # Використовуємо std dev (sqrt of variance)
-    y_noisy = y_clean + noise
+
+    # Зашумлений сигнал (використовуємо поточний шум)
+    y_noisy = y_clean + current_noise
 
     # Застосування вибраного фільтра або використання чистого сигналу
     if filter_type == "butterworth":
@@ -230,16 +263,28 @@ def update_plot(amp, freq, phase, noise_mean, noise_cov, switches, filter_type):
     if "show_noise" in switches:
         fig.add_trace(
             go.Scatter(
-                x=t, y=y_noisy, name="Шум", line=dict(color="#e74c3c", dash="dot")
+                x=t,
+                y=y_noisy,
+                name="Шумний",
+                line=dict(
+                    color="#e74c3c", dash="dot"
+                ),  # Змінено назву на "Шумний" для ясності
             )
         )
+    # Показуємо відфільтрований сигнал, якщо чекбокс "Показати фільтр" увімкнено
     if "show_filtered" in switches:
-        # Показуємо відфільтрований сигнал лише якщо вибрано фільтр (або "none", де y_filtered=y_clean)
-        # Або можна було б зробити y_filtered = None якщо filter_type == "none", і перевіряти тут.
-        # Поточна логіка покаже чистий сигнал як "Фільтр", якщо вибрано "Без фільтра" та увімкнено "Показати фільтр".
+        # Визначаємо назву траси залежно від вибраного фільтра
+        filter_name = {
+            "none": "Чистий (Без фільтра)",  # Назва, якщо вибрано "none" але відображаємо
+            "butterworth": "Відфільтрований (Баттерворт)",
+            "custom": "Відфільтрований (Ковзне середнє)",
+        }.get(
+            filter_type, "Відфільтрований"
+        )  # Запасний варіант назви
+
         fig.add_trace(
             go.Scatter(
-                x=t, y=y_filtered, name="Фільтр", line=dict(color="#3498db", width=2)
+                x=t, y=y_filtered, name=filter_name, line=dict(color="#3498db", width=2)
             )
         )
 
@@ -251,6 +296,8 @@ def update_plot(amp, freq, phase, noise_mean, noise_cov, switches, filter_type):
         template="plotly_white",
         hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        # Масштабуємо вісь Y автоматично, щоб вмістити всі видимі траси
+        yaxis=dict(autorange=True),
     )
     return fig
 
@@ -270,7 +317,8 @@ def update_plot(amp, freq, phase, noise_mean, noise_cov, switches, filter_type):
 )
 def reset_params(n_clicks):
     # Виконуємо скидання тільки після першого кліка і наступних
-    if n_clicks:
+    if n_clicks is not None and n_clicks > 0:  # Перевірка, що кнопка була натиснута
+        # Не скидаємо глобальні змінні current_noise, вони оновляться в update_plot при зміні параметрів шуму
         return (
             default_params["amplitude"],
             default_params["frequency"],
@@ -280,8 +328,16 @@ def reset_params(n_clicks):
             ["show_noise", "show_filtered"],  # Скидаємо перемикачі до початкового стану
             "none",  # Скидаємо тип фільтра
         )
-    # При першому завантаженні сторінки (n_clicks є None або 0) нічого не оновлюємо
-    return dash.no_update
+    # При першому завантаженні сторінки або якщо n_clicks None/0, нічого не оновлюємо
+    return (
+        dash.no_update,
+        dash.no_update,
+        dash.no_update,
+        dash.no_update,
+        dash.no_update,
+        dash.no_update,
+        dash.no_update,
+    )
 
 
 # Запуск додатка
